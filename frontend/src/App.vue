@@ -1,7 +1,7 @@
 <template>
   <div id="app" class="min-h-screen bg-gray-50">
     <Header v-if="isAuthenticated" />
-    <div class="flex pt-16"> <!-- Добавляем отступ сверху для header -->
+    <div class="flex pt-16">
       <Sidebar v-if="isAuthenticated" />
       <main :class="['flex-1 min-h-screen transition-all duration-300',
                     isAuthenticated ? 'ml-64' : 'ml-0']">
@@ -14,7 +14,7 @@
 </template>
 
 <script>
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import Header from '@/components/layout/Header.vue'
 import Sidebar from '@/components/layout/Sidebar.vue'
@@ -29,10 +29,6 @@ export default {
     const authStore = useAuthStore()
 
     const isAuthenticated = computed(() => authStore.isAuthenticated)
-
-    onMounted(() => {
-      authStore.initialize()
-    })
 
     return {
       isAuthenticated

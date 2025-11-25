@@ -42,7 +42,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/generated', express.static(path.join(__dirname, '../generated')));
 
 // Swagger Documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec)); // Добавляем эту строку
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Basic health check route
 app.get('/health', (req, res) => {
@@ -60,6 +60,8 @@ app.use('/api/config', require('./src/api/routes/config'));
 app.use('/api/asterisk', require('./src/api/routes/asterisk'));
 app.use('/api/queues', require('./src/api/routes/queues'));
 app.use('/api/trunks', require('./src/api/routes/trunks'));
+app.use('/api/users', require('./src/api/routes/users'));
+app.use('/api/audit', require('./src/api/routes/audit'));
 
 // 404 handler
 app.use((req, res) => {

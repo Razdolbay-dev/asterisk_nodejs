@@ -49,7 +49,9 @@ export default {
       { to: '/sip', text: 'SIP Accounts', icon: '📞' },
       { to: '/queues', text: 'Queues', icon: '👥' },
       { to: '/trunks', text: 'Trunks', icon: '🔗' },
-      { to: '/config', text: 'Config Manager', icon: '⚙️' }
+      { to: '/config', text: 'Config Manager', icon: '⚙️' },
+      { to: '/users', text: 'User Management', icon: '👥' },
+      { to: '/audit', text: 'Audit Log', icon: '📝' }
     ]
 
     return {

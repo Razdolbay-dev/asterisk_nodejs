@@ -99,4 +99,22 @@ export const configAPI = {
     deleteRawConfigFile: (filename) => api.delete(`/config/raw/${filename}`)
 }
 
+export const usersAPI = {
+    getUsers: () => api.get('/users'),
+    getUser: (id) => api.get(`/users/${id}`),
+    getUserStats: () => api.get('/users/stats'),
+    createUser: (data) => api.post('/users', data),
+    updateUser: (id, data) => api.put(`/users/${id}`, data),
+    deleteUser: (id) => api.delete(`/users/${id}`),
+    changePassword: (id, data) => api.post(`/users/${id}/change-password`, data),
+    resetPassword: (id, data) => api.post(`/users/${id}/reset-password`, data),
+    deactivateUser: (id) => api.post(`/users/${id}/deactivate`)
+}
+
+export const auditAPI = {
+    getLogs: (params) => api.get('/audit/logs', { params }),
+    getStats: () => api.get('/audit/stats'),
+    clearLogs: () => api.delete('/audit/logs')
+}
+
 export default api
