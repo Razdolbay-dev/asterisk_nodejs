@@ -9,8 +9,18 @@ const { swaggerSpec, swaggerUi } = require('./src/config/swagger'); // Доба�
 
 
 const app = express();
+
+// Добавляем после инициализации Express app
+const http = require('http');
+const WebSocketService = require('./src/services/websocket/websocket.service');
+
+// Создаем HTTP сервер вместо прямого listen
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
+
+// Инициализируем WebSocket сервер
+WebSocketService.initialize(server);
 
 // Middleware
 app.use(helmet());
@@ -70,39 +80,16 @@ app.use((error, req, res, next) => {
     });
 });
 
-// Инициализация AMI соединения при запуске
-const initializeAMI = async () => {
-    try {
-        const asteriskAMIService = require('./src/services/asterisk/ami.service');
-        await asteriskAMIService.connect();
-
-        // Обработчики событий AMI
-        asteriskAMIService.on('connected', () => {
-            console.log('🎯 AMI Event: Connected to Asterisk');
-        });
-
-        asteriskAMIService.on('disconnected', () => {
-            console.log('🎯 AMI Event: Disconnected from Asterisk');
-        });
-
-        asteriskAMIService.on('event', (event) => {
-            console.log(`🎯 AMI Event [${event.type}]:`, event.data);
-        });
-
-    } catch (error) {
-        console.warn('⚠️ Failed to initialize AMI connection:', error.message);
-        console.log('🔄 AMI will attempt to reconnect automatically...');
-    }
-};
-
 // Запуск сервера с инициализацией AMI
 const startServer = async () => {
     try {
-        app.listen(PORT, HOST, () => {
+        server.listen(PORT, HOST, () => {
             console.log(`🚀 Asterisk GUI Backend running on port ${PORT}`);
             console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`📍 Health check: http://${HOST}:${PORT}/health`);
-            console.log(`🔐 Auth endpoint: http://${HOST}:${PORT}/api/auth/login`);
+            console.log(`📍 Health check: http://localhost:${PORT}/health`);
+            console.log(`🔐 Auth endpoint: http://localhost:${PORT}/api/auth/login`);
+            console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
+            console.log(`🔗 WebSocket endpoint: ws://localhost:${PORT}/ws`);
         });
 
         // Инициализируем AMI соединение после запуска сервера
@@ -111,6 +98,33 @@ const startServer = async () => {
     } catch (error) {
         console.error('❌ Failed to start server:', error);
         process.exit(1);
+    }
+};
+
+// Обновляем initializeAMI для подключения WebSocket
+const initializeAMI = async () => {
+    try {
+        const asteriskAMIService = require('./src/services/asterisk/ami.service');
+
+        // Устанавливаем WebSocket сервис в AMI сервис
+        asteriskAMIService.setWebSocketService(WebSocketService);
+
+        await asteriskAMIService.connect();
+
+        // Обработчики событий AMI
+        asteriskAMIService.on('connected', () => {
+            console.log('🎯 AMI Event: Connected to Asterisk');
+            WebSocketService.sendSystemEvent('ami_connected', { status: 'connected' });
+        });
+
+        asteriskAMIService.on('disconnected', () => {
+            console.log('🎯 AMI Event: Disconnected from Asterisk');
+            WebSocketService.sendSystemEvent('ami_disconnected', { status: 'disconnected' });
+        });
+
+    } catch (error) {
+        console.warn('⚠️ Failed to initialize AMI connection:', error.message);
+        console.log('🔄 AMI will attempt to reconnect automatically...');
     }
 };
 

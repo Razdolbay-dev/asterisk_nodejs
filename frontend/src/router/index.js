@@ -31,7 +31,14 @@ const routes = [
         name: 'Trunks',
         component: () => import('@/views/Trunks.vue'),
         meta: { requiresAuth: true }
+    },
+    {
+        path: '/config',
+        name: 'ConfigManager',
+        component: () => import('@/views/ConfigManager.vue'),
+        meta: { requiresAuth: true }
     }
+
 ]
 
 const router = createRouter({

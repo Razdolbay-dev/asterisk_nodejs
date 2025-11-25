@@ -10,7 +10,9 @@ class AsteriskAMIService extends EventEmitter {
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 10;
         this.reconnectDelay = 5000;
+        this.websocketService = null;
     }
+
 
     async connect() {
         return new Promise((resolve, reject) => {
@@ -62,10 +64,15 @@ class AsteriskAMIService extends EventEmitter {
         });
     }
 
+    // Добавляем метод для установки WebSocket сервиса
+    setWebSocketService(websocketService) {
+        this.websocketService = websocketService;
+    }
+
+    // Обновляем setupEventHandlers для отправки событий через WebSocket
     setupEventHandlers() {
         if (!this.connection) return;
 
-        // Важные события для мониторинга
         const importantEvents = [
             'PeerStatus',        // Статус SIP пиров
             'Registry',          // Регистрация транков
@@ -77,11 +84,26 @@ class AsteriskAMIService extends EventEmitter {
             'QueueCallerLeave',  // Выход из очереди
             'Dial',              // Набор номера
             'VarSet',            // Установка переменной
+            'BridgeEnter',       // Вход в бридж
+            'BridgeLeave',       // Выход из бридж
+            'Hold',              // Удержание вызова
+            'Unhold',            // Снятие с удержания
         ];
 
         importantEvents.forEach(event => {
             this.connection.on(event, (evt) => {
                 console.log(`📞 AMI Event [${event}]:`, evt.peer || evt.channel || evt.queue);
+
+                // Отправляем событие через WebSocket
+                if (this.websocketService) {
+                    this.websocketService.broadcast({
+                        type: 'ami_event',
+                        event: event,
+                        data: evt,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+
                 this.emit('event', { type: event, data: evt });
                 this.emit(event, evt);
             });

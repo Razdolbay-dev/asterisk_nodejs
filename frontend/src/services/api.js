@@ -90,7 +90,13 @@ export const configAPI = {
     getSnapshots: () => api.get('/config/snapshots'),
     createSnapshot: (comment) => api.post('/config/snapshots', { comment }),
     restoreSnapshot: (id) => api.post(`/config/snapshots/${id}/restore`),
-    deleteSnapshot: (id) => api.delete(`/config/snapshots/${id}`)
+    deleteSnapshot: (id) => api.delete(`/config/snapshots/${id}`),
+
+    // Новые методы для raw-конфигов
+    getRawConfigFiles: () => api.get('/config/raw'),
+    getRawConfigFile: (filename) => api.get(`/config/raw/${filename}`),
+    updateRawConfigFile: (filename, data) => api.put(`/config/raw/${filename}`, data),
+    deleteRawConfigFile: (filename) => api.delete(`/config/raw/${filename}`)
 }
 
 export default api

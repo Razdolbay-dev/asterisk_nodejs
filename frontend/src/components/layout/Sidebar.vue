@@ -48,7 +48,8 @@ export default {
       { to: '/', text: 'Dashboard', icon: '📊' },
       { to: '/sip', text: 'SIP Accounts', icon: '📞' },
       { to: '/queues', text: 'Queues', icon: '👥' },
-      { to: '/trunks', text: 'Trunks', icon: '🔗' }
+      { to: '/trunks', text: 'Trunks', icon: '🔗' },
+      { to: '/config', text: 'Config Manager', icon: '⚙️' }
     ]
 
     return {
