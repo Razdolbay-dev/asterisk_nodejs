@@ -1,6 +1,7 @@
 const swaggerJSDoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 
+
 const options = {
     definition: {
         openapi: '3.0.0',
@@ -19,7 +20,7 @@ const options = {
         },
         servers: [
             {
-                url: 'http://localhost:3000',
+                url: 'http://0.0.0.0:3000',
                 description: 'Development server'
             },
             {

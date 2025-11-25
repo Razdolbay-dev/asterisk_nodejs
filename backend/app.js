@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const { swaggerSpec, swaggerUi } = require('./src/config/swagger'); // Добавляем эту строку
 
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
