@@ -101,8 +101,6 @@
     "protocol": "udp"
   }'
 
-  {"success":true,"data":{"id":"myprovider","name":"My VoIP Provider","type":"peer","host":"sip.voip-provider.com","port":5060,"username":"myaccount","password":"mysecretpassword","fromuser":"myaccount","fromdomain":"sip.voip-provider.com","context":"from-trunk","qualify":"yes","qualify_frequency":60,"insecure":"invite,port","protocol":"udp","register":"yes","status":"active","createdAt":"2025-11-25T12:04:12.428Z","createdBy":"admin"},"message":"Trunk created successfully"}
-
 # Обновить транк
  curl -X PUT http://192.168.88.182:3000/api/trunks/myprovider \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwidXNlcm5hbWUiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImVtYWlsIjoiYWRtaW5AYXN0ZXJpc2subG9jYWwiLCJpYXQiOjE3NjQwNjk4NDYsImV4cCI6MTc2NDE1NjI0Nn0.FyBnPmbQjd8eiCxqzOlGE-66d7bNqLPweiVJeuaHDtM" \
@@ -111,5 +109,3 @@
     "qualify_frequency": 30,
     "insecure": "port"
   }'
-
-{"success":true,"data":{"id":"myprovider","name":"My VoIP Provider","type":"peer","host":"sip.voip-provider.com","port":5060,"username":"myaccount","password":"mysecretpassword","fromuser":"myaccount","fromdomain":"sip.voip-provider.com","context":"from-trunk","qualify":"yes","qualify_frequency":30,"insecure":"port","protocol":"udp","register":"yes","status":"active","createdAt":"2025-11-25T12:04:12.428Z","createdBy":"admin","updatedAt":"2025-11-25T12:05:01.478Z","updatedBy":"admin"},"message":"Trunk updated successfully"}
