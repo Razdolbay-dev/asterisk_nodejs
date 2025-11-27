@@ -1,0 +1,19 @@
+{
+  "version": "1.0.0",
+  "asterisk": {
+    "host": "localhost",
+    "port": 5038,
+    "username": "admin",
+    "password": "password"
+  },
+  "security": {
+    "jwtSecret": "your-super-secret-jwt-key-change-in-production",
+    "jwtExpiresIn": "24h",
+    "maxLoginAttempts": 5,
+    "lockoutDuration": 15
+  },
+  "paths": {
+    "generated": "../../generated",
+    "snapshots": "../../snapshots"
+  }
+}

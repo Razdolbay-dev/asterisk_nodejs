@@ -1,0 +1,9 @@
+{
+  "id": "28292a67-93fe-4ed6-8562-286dbde05fe5",
+  "comment": "Create SIP account: 101",
+  "createdBy": 1,
+  "timestamp": "2025-11-27T11:59:47.002Z",
+  "files": [
+    "pjsip.conf"
+  ]
+}

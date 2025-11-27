@@ -1,0 +1,15 @@
+[
+  {
+    "id": "1",
+    "username": "admin",
+    "password": "$2a$12$LQv3c1yqBWVHxkd0L6kZrOuScOLMjZLvIyMWVh5RINOhSgBM3qQ0a",
+    "role": "admin",
+    "email": "admin@asterisk.local",
+    "isActive": true,
+    "createdAt": "2025-11-27T11:53:17.092Z",
+    "updatedAt": "2025-11-27T11:53:17.092Z",
+    "lastLogin": null,
+    "failedLoginAttempts": 0,
+    "lockedUntil": null
+  }
+]

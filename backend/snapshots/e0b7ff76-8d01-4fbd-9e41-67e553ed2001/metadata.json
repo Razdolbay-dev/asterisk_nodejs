@@ -1,0 +1,9 @@
+{
+  "id": "e0b7ff76-8d01-4fbd-9e41-67e553ed2001",
+  "comment": "Delete SIP account: admin",
+  "createdBy": 1,
+  "timestamp": "2025-11-27T11:59:26.156Z",
+  "files": [
+    "pjsip.conf"
+  ]
+}
