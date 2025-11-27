@@ -1,10 +1,12 @@
+// backend/src/services/user.service.js
+
 const User = require('../models/User');
 const storageService = require('./storage.service');
 const auditService = require('./audit.service');
 
 class UserService {
     constructor() {
-        this.users = new Map();
+        this.users = [];
         this.initializeFromStorage();
     }
 
@@ -12,16 +14,10 @@ class UserService {
     async initializeFromStorage() {
         try {
             const usersData = await storageService.getCollection('users');
-
-            for (const userData of usersData) {
-                const user = new User(userData);
-                this.users.set(user.id, user);
-            }
-
-            console.log(`✅ Loaded ${this.users.size} users from storage`);
+            this.users = usersData.map(userData => new User(userData));
+            console.log(`✅ Loaded ${this.users.length} users from storage`);
         } catch (error) {
             console.error('❌ Failed to load users from storage:', error);
-            // Инициализируем default пользователей
             await this.initializeDefaultUsers();
         }
     }
@@ -29,8 +25,9 @@ class UserService {
     // Сохранение пользователей в JSON
     async saveToStorage() {
         try {
-            const usersData = Array.from(this.users.values()).map(user => user.toJSON());
+            const usersData = this.users.map(user => user.toJSON());
             await storageService.saveCollection('users', usersData);
+            console.log(`💾 Saved ${this.users.length} users to storage`);
         } catch (error) {
             console.error('❌ Failed to save users to storage:', error);
             throw error;
@@ -38,44 +35,54 @@ class UserService {
     }
 
     async initializeDefaultUsers() {
-        const defaultUsers = await storageService.readFile('users.json');
-
-        for (const userData of defaultUsers) {
-            const user = new User(userData);
-            this.users.set(user.id, user);
+        try {
+            const defaultUsersData = await storageService.readFile('users.json');
+            this.users = defaultUsersData.map(userData => new User(userData));
+            await this.saveToStorage();
+            console.log('✅ Default users initialized and saved to storage');
+        } catch (error) {
+            console.error('❌ Failed to initialize default users:', error);
+            // Создаем базового администратора если файла нет
+            await this.createDefaultAdmin();
         }
+    }
 
+    async createDefaultAdmin() {
+        const adminUser = new User({
+            username: 'admin',
+            role: 'admin',
+            email: 'admin@asterisk.local',
+            isActive: true
+        });
+
+        await adminUser.setPassword('password123');
+        this.users = [adminUser];
         await this.saveToStorage();
-        console.log('✅ Default users initialized and saved to storage');
+        console.log('✅ Default admin user created');
     }
 
     async findByUsername(username) {
-        for (const user of this.users.values()) {
-            if (user.username === username && user.isActive) {
-                return user;
-            }
-        }
-        return null;
+        return this.users.find(user =>
+            user.username === username && user.isActive
+        ) || null;
     }
 
     async findById(id) {
-        return this.users.get(id) || null;
+        return this.users.find(user => user.id === id) || null;
     }
 
     async findAll() {
-        return Array.from(this.users.values()).map(user => user.toJSON());
+        return this.users.map(user => user.toJSON());
     }
 
     async create(userData, createdBy) {
-        const existingUser = await this.findByUsername(userData.username);
+        const existingUser = this.users.find(user => user.username === userData.username);
         if (existingUser) {
             throw new Error('Username already exists');
         }
 
-        const user = new User(userData);
-        await user.setPassword(userData.password);
-
-        this.users.set(user.id, user);
+        const user = await User.create(userData);
+        this.users.push(user);
         await this.saveToStorage();
 
         await auditService.log({
@@ -90,19 +97,18 @@ class UserService {
     }
 
     async update(id, updates, updatedBy) {
-        const user = this.users.get(id);
-        if (!user) {
+        const userIndex = this.users.findIndex(user => user.id === id);
+        if (userIndex === -1) {
             throw new Error('User not found');
         }
 
-        const oldData = { ...user.toJSON() };
+        const oldData = { ...this.users[userIndex].toJSON() };
 
-        if (updates.email !== undefined) user.email = updates.email;
-        if (updates.role !== undefined) user.role = updates.role;
-        if (updates.isActive !== undefined) user.isActive = updates.isActive;
+        if (updates.email !== undefined) this.users[userIndex].email = updates.email;
+        if (updates.role !== undefined) this.users[userIndex].role = updates.role;
+        if (updates.isActive !== undefined) this.users[userIndex].isActive = updates.isActive;
 
-        user.updatedAt = new Date().toISOString();
-
+        this.users[userIndex].updatedAt = new Date().toISOString();
         await this.saveToStorage();
 
         await auditService.log({
@@ -111,58 +117,58 @@ class UserService {
             targetUserId: id,
             details: {
                 old: oldData,
-                new: user.toJSON(),
+                new: this.users[userIndex].toJSON(),
                 changes: updates
             },
             timestamp: new Date().toISOString()
         });
 
-        return user.toJSON();
+        return this.users[userIndex].toJSON();
     }
 
     async changePassword(id, newPassword, changedBy) {
-        const user = this.users.get(id);
-        if (!user) {
+        const userIndex = this.users.findIndex(user => user.id === id);
+        if (userIndex === -1) {
             throw new Error('User not found');
         }
 
-        await user.setPassword(newPassword);
+        await this.users[userIndex].setPassword(newPassword);
         await this.saveToStorage();
 
         await auditService.log({
             action: 'PASSWORD_CHANGED',
             userId: changedBy,
             targetUserId: id,
-            details: { username: user.username },
+            details: { username: this.users[userIndex].username },
             timestamp: new Date().toISOString()
         });
 
-        return user.toJSON();
+        return this.users[userIndex].toJSON();
     }
 
     async resetPassword(id, newPassword, resetBy) {
-        const user = this.users.get(id);
-        if (!user) {
+        const userIndex = this.users.findIndex(user => user.id === id);
+        if (userIndex === -1) {
             throw new Error('User not found');
         }
 
-        await user.setPassword(newPassword);
+        await this.users[userIndex].setPassword(newPassword);
         await this.saveToStorage();
 
         await auditService.log({
             action: 'PASSWORD_RESET',
             userId: resetBy,
             targetUserId: id,
-            details: { username: user.username, resetBy },
+            details: { username: this.users[userIndex].username, resetBy },
             timestamp: new Date().toISOString()
         });
 
-        return user.toJSON();
+        return this.users[userIndex].toJSON();
     }
 
     async delete(id, deletedBy) {
-        const user = this.users.get(id);
-        if (!user) {
+        const userIndex = this.users.findIndex(user => user.id === id);
+        if (userIndex === -1) {
             throw new Error('User not found');
         }
 
@@ -170,8 +176,8 @@ class UserService {
             throw new Error('Cannot delete your own account');
         }
 
-        const userData = user.toJSON();
-        this.users.delete(id);
+        const userData = this.users[userIndex].toJSON();
+        this.users.splice(userIndex, 1);
         await this.saveToStorage();
 
         await auditService.log({
@@ -186,8 +192,8 @@ class UserService {
     }
 
     async deactivate(id, deactivatedBy) {
-        const user = this.users.get(id);
-        if (!user) {
+        const userIndex = this.users.findIndex(user => user.id === id);
+        if (userIndex === -1) {
             throw new Error('User not found');
         }
 
@@ -195,32 +201,49 @@ class UserService {
             throw new Error('Cannot deactivate your own account');
         }
 
-        user.isActive = false;
-        user.updatedAt = new Date().toISOString();
+        this.users[userIndex].isActive = false;
+        this.users[userIndex].updatedAt = new Date().toISOString();
         await this.saveToStorage();
 
         await auditService.log({
             action: 'USER_DEACTIVATED',
             userId: deactivatedBy,
             targetUserId: id,
-            details: { username: user.username },
+            details: { username: this.users[userIndex].username },
             timestamp: new Date().toISOString()
         });
 
-        return user.toJSON();
+        return this.users[userIndex].toJSON();
     }
 
     async getStats() {
-        const users = Array.from(this.users.values());
         return {
-            total: users.length,
-            active: users.filter(u => u.isActive).length,
+            total: this.users.length,
+            active: this.users.filter(u => u.isActive).length,
+            inactive: this.users.filter(u => !u.isActive).length,
             byRole: {
-                admin: users.filter(u => u.role === 'admin').length,
-                operator: users.filter(u => u.role === 'operator').length,
-                viewer: users.filter(u => u.role === 'viewer').length
-            }
+                admin: this.users.filter(u => u.role === 'admin').length,
+                operator: this.users.filter(u => u.role === 'operator').length,
+                viewer: this.users.filter(u => u.role === 'viewer').length
+            },
+            locked: this.users.filter(u => u.isLocked()).length
         };
+    }
+
+    // Получение пользователей для других модулей
+    getUsers() {
+        return this.users.map(user => user.toJSON());
+    }
+
+    // Метод для обновления пользователя (используется в auth)
+    async updateUser(user) {
+        const userIndex = this.users.findIndex(u => u.id === user.id);
+        if (userIndex === -1) {
+            throw new Error('User not found');
+        }
+
+        this.users[userIndex] = user;
+        await this.saveToStorage();
     }
 }
 

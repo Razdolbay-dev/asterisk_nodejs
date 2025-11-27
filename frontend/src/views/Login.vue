@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center p-4">
+  <div class="max-h-screen bg-gradient-to-br flex items-center justify-center p-4">
     <div class="card w-full max-w-md fade-in">
       <div class="p-8">
         <div class="text-center mb-8">
@@ -19,6 +19,7 @@
                 class="form-input"
                 placeholder="Enter your username"
                 required
+                :disabled="loading"
             >
           </div>
 
@@ -30,6 +31,7 @@
                 class="form-input"
                 placeholder="Enter your password"
                 required
+                :disabled="loading"
             >
           </div>
 
@@ -81,8 +83,8 @@ export default {
     const router = useRouter()
 
     const form = ref({
-      username: '',
-      password: ''
+      username: 'admin',
+      password: 'password123'
     })
 
     const loading = ref(false)
@@ -92,15 +94,25 @@ export default {
       loading.value = true
       error.value = ''
 
-      const result = await authStore.login(form.value)
+      console.log('🔐 Starting login process...')
 
-      if (result.success) {
-        router.push('/')
-      } else {
-        error.value = result.error
+      try {
+        const result = await authStore.login(form.value)
+        console.log('🔐 Login result:', result)
+
+        if (result.success) {
+          console.log('✅ Login successful, redirecting to dashboard...')
+          router.push('/')
+        } else {
+          error.value = result.error
+          console.error('❌ Login failed:', result.error)
+        }
+      } catch (err) {
+        error.value = 'An unexpected error occurred'
+        console.error('❌ Login exception:', err)
+      } finally {
+        loading.value = false
       }
-
-      loading.value = false
     }
 
     return {

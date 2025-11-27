@@ -1,7 +1,22 @@
+// backend/src/models/User.js
+
 const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcryptjs');
 
 class User {
-    constructor({ id, username, password, role, email, createdAt, updatedAt, isActive = true }) {
+    constructor({
+                    id,
+                    username,
+                    password,
+                    role,
+                    email,
+                    createdAt,
+                    updatedAt,
+                    isActive = true,
+                    lastLogin = null,
+                    failedLoginAttempts = 0,
+                    lockedUntil = null
+                }) {
         this.id = id || uuidv4();
         this.username = username;
         this.password = password; // Хешированный пароль
@@ -10,20 +25,31 @@ class User {
         this.isActive = isActive;
         this.createdAt = createdAt || new Date().toISOString();
         this.updatedAt = updatedAt || new Date().toISOString();
-        this.lastLogin = null;
-        this.failedLoginAttempts = 0;
-        this.lockedUntil = null;
+        this.lastLogin = lastLogin;
+        this.failedLoginAttempts = failedLoginAttempts;
+        this.lockedUntil = lockedUntil;
     }
 
     // Проверка пароля
     async checkPassword(password) {
-        const bcrypt = require('bcryptjs');
-        return await bcrypt.compare(password, this.password);
+        if (!password || !this.password) {
+            return false;
+        }
+
+        try {
+            return await bcrypt.compare(password, this.password);
+        } catch (error) {
+            console.error('Password comparison error:', error);
+            return false;
+        }
     }
 
     // Хеширование пароля
     async setPassword(password) {
-        const bcrypt = require('bcryptjs');
+        if (!password) {
+            throw new Error('Password is required');
+        }
+
         const saltRounds = 12;
         this.password = await bcrypt.hash(password, saltRounds);
         this.updatedAt = new Date().toISOString();
@@ -38,14 +64,16 @@ class User {
                 'queues:read', 'queues:write', 'queues:delete',
                 'trunks:read', 'trunks:write', 'trunks:delete',
                 'config:read', 'config:write', 'config:delete',
-                'system:reload', 'system:restart'
+                'system:reload', 'system:restart',
+                'audit:read', 'audit:delete'
             ],
             operator: [
                 'users:read',
                 'sip:read', 'sip:write',
                 'queues:read', 'queues:write',
                 'trunks:read', 'trunks:write',
-                'config:read'
+                'config:read',
+                'system:reload'
             ],
             viewer: [
                 'users:read',
@@ -107,6 +135,15 @@ class User {
             failedLoginAttempts: this.failedLoginAttempts,
             lockedUntil: this.lockedUntil
         };
+    }
+
+    // Статический метод для создания пользователя с хешированным паролем
+    static async create(userData) {
+        const user = new User(userData);
+        if (userData.password) {
+            await user.setPassword(userData.password);
+        }
+        return user;
     }
 }
 

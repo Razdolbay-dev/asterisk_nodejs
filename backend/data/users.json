@@ -2,13 +2,24 @@
   {
     "id": "1",
     "username": "admin",
-    "password": "$2a$12$LQv3c1yqBWVHxkd0L6kZrOuScOLMjZLvIyMWVh5RINOhSgBM3qQ0a",
     "role": "admin",
     "email": "admin@asterisk.local",
     "isActive": true,
-    "createdAt": "2025-11-27T11:53:17.092Z",
-    "updatedAt": "2025-11-27T11:53:17.092Z",
-    "lastLogin": null,
+    "createdAt": "2025-11-27T14:13:37.458Z",
+    "updatedAt": "2025-11-27T14:19:41.547Z",
+    "lastLogin": "2025-11-27T14:19:41.547Z",
+    "failedLoginAttempts": 0,
+    "lockedUntil": null
+  },
+  {
+    "id": "b0128d8e-80a9-4e4c-aa4b-4ea3501e3585",
+    "username": "paul",
+    "role": "admin",
+    "email": "paul@netonline.ru",
+    "isActive": true,
+    "createdAt": "2025-11-27T14:20:19.345Z",
+    "updatedAt": "2025-11-27T14:20:30.975Z",
+    "lastLogin": "2025-11-27T14:20:30.975Z",
     "failedLoginAttempts": 0,
     "lockedUntil": null
   }

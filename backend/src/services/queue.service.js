@@ -1,5 +1,8 @@
 const storageService = require('./storage.service');
 const auditService = require('./audit.service');
+const queuesGenerator = require('./config/queues.generator');
+const snapshotService = require('./config/snapshot.service');
+const asteriskAMIService = require('./asterisk/ami.service');
 
 class QueueService {
     constructor() {
@@ -20,6 +23,7 @@ class QueueService {
     async saveToStorage() {
         try {
             await storageService.saveCollection('queues', this.queues);
+            console.log(`💾 Saved ${this.queues.length} queues to storage`);
         } catch (error) {
             console.error('❌ Failed to save queues to storage:', error);
             throw error;
@@ -47,17 +51,39 @@ class QueueService {
 
         const newQueue = {
             ...queueData,
+            members: queueData.members || [],
             createdAt: new Date().toISOString(),
-            createdBy: createdBy
+            updatedAt: new Date().toISOString(),
+            createdBy: createdBy,
+            updatedBy: createdBy
         };
 
         this.queues.push(newQueue);
         await this.saveToStorage();
 
+        // Создаем снапшот после создания
+        await snapshotService.createSnapshot(
+            `Create queue: ${newQueue.name} (${newQueue.id})`,
+            createdBy
+        );
+
+        // Генерируем и сохраняем конфиг
+        await queuesGenerator.saveQueuesConfig(this.queues);
+
+        // Релоад очередей в Asterisk
+        try {
+            await asteriskAMIService.reloadQueues();
+        } catch (amiError) {
+            console.warn('⚠️ AMI reload failed, but config was saved:', amiError.message);
+        }
+
         await auditService.log({
             action: 'QUEUE_CREATED',
             userId: createdBy,
-            details: { queueId: newQueue.id, name: newQueue.name },
+            details: {
+                queueId: newQueue.id,
+                name: newQueue.name
+            },
             timestamp: new Date().toISOString()
         });
 
@@ -70,10 +96,12 @@ class QueueService {
             throw new Error('Queue not found');
         }
 
-        const oldQueue = { ...this.queues[queueIndex] };
-
         // Обновляем разрешенные поля
-        const allowedFields = ['name', 'strategy', 'timeout', 'wrapuptime', 'maxlen', 'servicelevel', 'musicclass', 'announce', 'members'];
+        const allowedFields = [
+            'name', 'strategy', 'timeout', 'wrapuptime', 'maxlen',
+            'servicelevel', 'musicclass', 'announce', 'members'
+        ];
+
         allowedFields.forEach(field => {
             if (updates[field] !== undefined) {
                 this.queues[queueIndex][field] = updates[field];
@@ -84,6 +112,22 @@ class QueueService {
         this.queues[queueIndex].updatedBy = updatedBy;
 
         await this.saveToStorage();
+
+        // Создаем снапшот после обновления
+        await snapshotService.createSnapshot(
+            `Update queue: ${this.queues[queueIndex].name} (${id})`,
+            updatedBy
+        );
+
+        // Генерируем и сохраняем конфиг
+        await queuesGenerator.saveQueuesConfig(this.queues);
+
+        // Релоад очередей в Asterisk
+        try {
+            await asteriskAMIService.reloadQueues();
+        } catch (amiError) {
+            console.warn('⚠️ AMI reload failed, but config was saved:', amiError.message);
+        }
 
         await auditService.log({
             action: 'QUEUE_UPDATED',
@@ -108,10 +152,29 @@ class QueueService {
         const deletedQueue = this.queues.splice(queueIndex, 1)[0];
         await this.saveToStorage();
 
+        // Создаем снапшот после удаления
+        await snapshotService.createSnapshot(
+            `Delete queue: ${deletedQueue.name} (${id})`,
+            deletedBy
+        );
+
+        // Генерируем и сохраняем конфиг
+        await queuesGenerator.saveQueuesConfig(this.queues);
+
+        // Релоад очередей в Asterisk
+        try {
+            await asteriskAMIService.reloadQueues();
+        } catch (amiError) {
+            console.warn('⚠️ AMI reload failed, but config was saved:', amiError.message);
+        }
+
         await auditService.log({
             action: 'QUEUE_DELETED',
             userId: deletedBy,
-            details: { queueId: id, name: deletedQueue.name },
+            details: {
+                queueId: id,
+                name: deletedQueue.name
+            },
             timestamp: new Date().toISOString()
         });
 
@@ -140,6 +203,22 @@ class QueueService {
 
         await this.saveToStorage();
 
+        // Создаем снапшот после добавления участника
+        await snapshotService.createSnapshot(
+            `Add member to queue: ${queue.name}`,
+            addedBy
+        );
+
+        // Генерируем и сохраняем конфиг
+        await queuesGenerator.saveQueuesConfig(this.queues);
+
+        // Релоад очередей в Asterisk
+        try {
+            await asteriskAMIService.reloadQueues();
+        } catch (amiError) {
+            console.warn('⚠️ AMI reload failed, but config was saved:', amiError.message);
+        }
+
         await auditService.log({
             action: 'QUEUE_MEMBER_ADDED',
             userId: addedBy,
@@ -164,11 +243,27 @@ class QueueService {
             throw new Error('Member not found in this queue');
         }
 
-        queue.members.splice(memberIndex, 1);
+        const removedMember = queue.members.splice(memberIndex, 1)[0];
         queue.updatedAt = new Date().toISOString();
         queue.updatedBy = removedBy;
 
         await this.saveToStorage();
+
+        // Создаем снапшот после удаления участника
+        await snapshotService.createSnapshot(
+            `Remove member from queue: ${queue.name}`,
+            removedBy
+        );
+
+        // Генерируем и сохраняем конфиг
+        await queuesGenerator.saveQueuesConfig(this.queues);
+
+        // Релоад очередей в Asterisk
+        try {
+            await asteriskAMIService.reloadQueues();
+        } catch (amiError) {
+            console.warn('⚠️ AMI reload failed, but config was saved:', amiError.message);
+        }
 
         await auditService.log({
             action: 'QUEUE_MEMBER_REMOVED',
@@ -180,14 +275,22 @@ class QueueService {
             timestamp: new Date().toISOString()
         });
 
-        return queue;
+        return removedMember;
     }
 
     async getStats() {
+        const totalMembers = this.queues.reduce((sum, queue) => sum + (queue.members?.length || 0), 0);
+
         return {
             total: this.queues.length,
-            totalMembers: this.queues.reduce((sum, queue) => sum + queue.members.length, 0)
+            totalMembers: totalMembers,
+            averageMembers: this.queues.length > 0 ? (totalMembers / this.queues.length).toFixed(1) : 0
         };
+    }
+
+    // Получение очередей для других модулей
+    getQueues() {
+        return this.queues;
     }
 }
 

@@ -1,1 +1,24 @@
-[]
+[
+  {
+    "id": "0909",
+    "name": "GSM",
+    "type": "peer",
+    "host": "192.168.88.9",
+    "port": 5060,
+    "username": "local_sip",
+    "password": "local_sip",
+    "fromuser": "local_sip",
+    "fromdomain": "192.168.88.9",
+    "context": "from-trunk",
+    "qualify": "yes",
+    "qualify_frequency": 60,
+    "insecure": "invite,port",
+    "protocol": "udp",
+    "register": "yes",
+    "status": "active",
+    "createdAt": "2025-11-27T13:00:24.886Z",
+    "updatedAt": "2025-11-27T13:00:54.909Z",
+    "createdBy": 1,
+    "updatedBy": 1
+  }
+]

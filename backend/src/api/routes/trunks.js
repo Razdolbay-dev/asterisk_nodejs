@@ -1,42 +1,77 @@
 const express = require('express');
 const { authenticateToken, requireRole } = require('../../middleware/auth');
-const trunksGenerator = require('../../services/config/trunks.generator');
-const pjsipGenerator = require('../../services/config/pjsip.generator');
-const snapshotService = require('../../services/config/snapshot.service');
-const asteriskAMIService = require('../../services/asterisk/ami.service');
+const trunkService = require('../../services/trunk.service');
 
 const router = express.Router();
-
-// Временное хранилище в памяти для транков
-let trunks = [];
 
 // Все маршруты требуют аутентификации
 router.use(authenticateToken);
 
 // GET /api/trunks - список всех транков
-router.get('/', (req, res) => {
-    res.json({
-        success: true,
-        data: trunks,
-        total: trunks.length
-    });
+router.get('/', async (req, res) => {
+    try {
+        const trunks = await trunkService.findAll();
+        const stats = await trunkService.getStats();
+
+        res.json({
+            success: true,
+            data: trunks,
+            meta: {
+                total: stats.total,
+                active: stats.active,
+                registered: stats.registered,
+                registrationRate: stats.registrationRate
+            }
+        });
+    } catch (error) {
+        console.error('Get trunks error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch trunks'
+        });
+    }
+});
+
+// GET /api/trunks/stats - статистика транков
+router.get('/stats', async (req, res) => {
+    try {
+        const stats = await trunkService.getStats();
+        res.json({
+            success: true,
+            data: stats
+        });
+    } catch (error) {
+        console.error('Get trunk stats error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch trunk statistics'
+        });
+    }
 });
 
 // GET /api/trunks/:id - получение конкретного транка
-router.get('/:id', (req, res) => {
-    const trunk = trunks.find(t => t.id === req.params.id);
+router.get('/:id', async (req, res) => {
+    try {
+        const trunk = await trunkService.findById(req.params.id);
 
-    if (!trunk) {
-        return res.status(404).json({
+        if (!trunk) {
+            return res.status(404).json({
+                success: false,
+                error: 'Trunk not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: trunk
+        });
+    } catch (error) {
+        console.error('Get trunk error:', error);
+        res.status(500).json({
             success: false,
-            error: 'Trunk not found'
+            error: 'Failed to fetch trunk'
         });
     }
-
-    res.json({
-        success: true,
-        data: trunk
-    });
 });
 
 // POST /api/trunks - создание нового транка
@@ -57,7 +92,8 @@ router.post('/', requireRole(['admin', 'operator']), async (req, res) => {
             qualify_frequency = 60,
             insecure = 'invite,port',
             protocol = 'udp',
-            register = 'no'
+            register = 'no',
+            status = 'active'
         } = req.body;
 
         if (!id || !name || !host || !username || !password) {
@@ -67,16 +103,15 @@ router.post('/', requireRole(['admin', 'operator']), async (req, res) => {
             });
         }
 
-        // Проверка на дубликат
-        const existingTrunk = trunks.find(trunk => trunk.id === id);
-        if (existingTrunk) {
-            return res.status(409).json({
+        // Валидация ID
+        if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+            return res.status(400).json({
                 success: false,
-                error: `Trunk with ID ${id} already exists`
+                error: 'ID can only contain letters, numbers, hyphens and underscores'
             });
         }
 
-        const newTrunk = {
+        const trunk = await trunkService.create({
             id,
             name,
             type,
@@ -92,41 +127,23 @@ router.post('/', requireRole(['admin', 'operator']), async (req, res) => {
             insecure,
             protocol,
             register,
-            status: 'active',
-            createdAt: new Date(),
-            createdBy: req.user.username
-        };
-
-        // Создаем снапшот перед изменениями
-        await snapshotService.createSnapshot(
-            `Create trunk: ${name} (${id})`,
-            req.user.username
-        );
-
-        // Добавляем транк
-        trunks.push(newTrunk);
-
-        // Получаем текущие SIP аккаунты (нужно для генерации полного конфига)
-        const sipAccounts = require('./sip').getSIPAccounts(); // Временное решение
-
-        // Генерируем и сохраняем полный конфиг с SIP аккаунтами и транками
-        await trunksGenerator.saveFullPJSIPConfig(sipAccounts, trunks);
-
-        // Релоад PJSIP в Asterisk
-        try {
-            await asteriskAMIService.reloadPJSIP();
-        } catch (amiError) {
-            console.warn('⚠️ AMI reload failed, but config was saved:', amiError.message);
-        }
+            status
+        }, req.user.id);
 
         res.status(201).json({
             success: true,
-            data: newTrunk,
+            data: trunk,
             message: 'Trunk created successfully'
         });
 
     } catch (error) {
         console.error('Create trunk error:', error);
+        if (error.message.includes('already exists')) {
+            return res.status(409).json({
+                success: false,
+                error: error.message
+            });
+        }
         res.status(500).json({
             success: false,
             error: 'Failed to create trunk'
@@ -137,15 +154,6 @@ router.post('/', requireRole(['admin', 'operator']), async (req, res) => {
 // PUT /api/trunks/:id - обновление транка
 router.put('/:id', requireRole(['admin', 'operator']), async (req, res) => {
     try {
-        const trunkIndex = trunks.findIndex(t => t.id === req.params.id);
-
-        if (trunkIndex === -1) {
-            return res.status(404).json({
-                success: false,
-                error: 'Trunk not found'
-            });
-        }
-
         const {
             name,
             host,
@@ -163,52 +171,49 @@ router.put('/:id', requireRole(['admin', 'operator']), async (req, res) => {
             status
         } = req.body;
 
-        // Создаем снапшот перед изменениями
-        await snapshotService.createSnapshot(
-            `Update trunk: ${trunks[trunkIndex].name} (${req.params.id})`,
-            req.user.username
-        );
+        const updates = {};
+        if (name !== undefined) updates.name = name;
+        if (host !== undefined) updates.host = host;
+        if (port !== undefined) updates.port = port;
+        if (username !== undefined) updates.username = username;
+        if (password !== undefined) updates.password = password;
+        if (fromuser !== undefined) updates.fromuser = fromuser;
+        if (fromdomain !== undefined) updates.fromdomain = fromdomain;
+        if (context !== undefined) updates.context = context;
+        if (qualify !== undefined) updates.qualify = qualify;
+        if (qualify_frequency !== undefined) updates.qualify_frequency = qualify_frequency;
+        if (insecure !== undefined) updates.insecure = insecure;
+        if (protocol !== undefined) updates.protocol = protocol;
+        if (register !== undefined) updates.register = register;
+        if (status !== undefined) updates.status = status;
 
-        // Обновляем поля
-        if (name) trunks[trunkIndex].name = name;
-        if (host) trunks[trunkIndex].host = host;
-        if (port) trunks[trunkIndex].port = port;
-        if (username) trunks[trunkIndex].username = username;
-        if (password) trunks[trunkIndex].password = password;
-        if (fromuser) trunks[trunkIndex].fromuser = fromuser;
-        if (fromdomain) trunks[trunkIndex].fromdomain = fromdomain;
-        if (context) trunks[trunkIndex].context = context;
-        if (qualify !== undefined) trunks[trunkIndex].qualify = qualify;
-        if (qualify_frequency !== undefined) trunks[trunkIndex].qualify_frequency = qualify_frequency;
-        if (insecure) trunks[trunkIndex].insecure = insecure;
-        if (protocol) trunks[trunkIndex].protocol = protocol;
-        if (register !== undefined) trunks[trunkIndex].register = register;
-        if (status) trunks[trunkIndex].status = status;
-
-        trunks[trunkIndex].updatedAt = new Date();
-        trunks[trunkIndex].updatedBy = req.user.username;
-
-        // Получаем текущие SIP аккаунты
-        const sipAccounts = require('./sip').getSIPAccounts();
-
-        // Генерируем и сохраняем обновленный конфиг
-        await trunksGenerator.saveFullPJSIPConfig(sipAccounts, trunks);
-
-        // Релоад PJSIP в Asterisk
-        try {
-            await asteriskAMIService.reloadPJSIP();
-        } catch (amiError) {
-            console.warn('⚠️ AMI reload failed, but config was saved:', amiError.message);
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No valid fields to update'
+            });
         }
+
+        const updatedTrunk = await trunkService.update(
+            req.params.id,
+            updates,
+            req.user.id
+        );
 
         res.json({
             success: true,
-            data: trunks[trunkIndex],
+            data: updatedTrunk,
             message: 'Trunk updated successfully'
         });
 
     } catch (error) {
         console.error('Update trunk error:', error);
+        if (error.message.includes('not found')) {
+            return res.status(404).json({
+                success: false,
+                error: error.message
+            });
+        }
         res.status(500).json({
             success: false,
             error: 'Failed to update trunk'
@@ -219,37 +224,7 @@ router.put('/:id', requireRole(['admin', 'operator']), async (req, res) => {
 // DELETE /api/trunks/:id - удаление транка
 router.delete('/:id', requireRole(['admin']), async (req, res) => {
     try {
-        const trunkIndex = trunks.findIndex(t => t.id === req.params.id);
-
-        if (trunkIndex === -1) {
-            return res.status(404).json({
-                success: false,
-                error: 'Trunk not found'
-            });
-        }
-
-        const trunkName = trunks[trunkIndex].name;
-
-        // Создаем снапшот перед удалением
-        await snapshotService.createSnapshot(
-            `Delete trunk: ${trunkName} (${req.params.id})`,
-            req.user.username
-        );
-
-        const deletedTrunk = trunks.splice(trunkIndex, 1)[0];
-
-        // Получаем текущие SIP аккаунты
-        const sipAccounts = require('./sip').getSIPAccounts();
-
-        // Генерируем и сохраняем обновленный конфиг
-        await trunksGenerator.saveFullPJSIPConfig(sipAccounts, trunks);
-
-        // Релоад PJSIP в Asterisk
-        try {
-            await asteriskAMIService.reloadPJSIP();
-        } catch (amiError) {
-            console.warn('⚠️ AMI reload failed, but config was saved:', amiError.message);
-        }
+        const deletedTrunk = await trunkService.delete(req.params.id, req.user.id);
 
         res.json({
             success: true,
@@ -259,6 +234,12 @@ router.delete('/:id', requireRole(['admin']), async (req, res) => {
 
     } catch (error) {
         console.error('Delete trunk error:', error);
+        if (error.message.includes('not found')) {
+            return res.status(404).json({
+                success: false,
+                error: error.message
+            });
+        }
         res.status(500).json({
             success: false,
             error: 'Failed to delete trunk'
@@ -266,14 +247,7 @@ router.delete('/:id', requireRole(['admin']), async (req, res) => {
     }
 });
 
-// Вспомогательная функция для получения SIP аккаунтов
-function getSIPAccounts() {
-    // Временное решение - нужно рефакторить структуру данных
-    const sipRoutes = require('./sip');
-    return sipRoutes.getSIPAccounts ? sipRoutes.getSIPAccounts() : [];
-}
-
-// Экспортируем функцию для использования в других модулях
-router.getSIPAccounts = getSIPAccounts;
+// Экспортируем функцию для получения транков
+router.getTrunks = () => trunkService.getTrunks();
 
 module.exports = router;

@@ -1,1 +1,29 @@
-[]
+[
+  {
+    "id": "300",
+    "name": "300",
+    "strategy": "ringall",
+    "timeout": 30,
+    "wrapuptime": 10,
+    "maxlen": 0,
+    "servicelevel": 60,
+    "musicclass": "classic",
+    "announce": "queue-thankyou",
+    "members": [
+      {
+        "interface": "101",
+        "penalty": 0,
+        "membername": "101"
+      },
+      {
+        "interface": "102",
+        "penalty": 0,
+        "membername": "102"
+      }
+    ],
+    "createdAt": "2025-11-27T12:45:04.085Z",
+    "updatedAt": "2025-11-27T12:47:00.963Z",
+    "createdBy": 1,
+    "updatedBy": 1
+  }
+]

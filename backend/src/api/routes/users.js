@@ -1,7 +1,6 @@
 const express = require('express');
 const { authenticateToken, requireRole, requirePermission } = require('../../middleware/auth');
 const userService = require('../../services/user.service');
-const auditService = require('../../services/audit.service');
 
 const router = express.Router();
 
@@ -12,10 +11,17 @@ router.use(authenticateToken);
 router.get('/', requirePermission('users:read'), async (req, res) => {
     try {
         const users = await userService.findAll();
+        const stats = await userService.getStats();
+
         res.json({
             success: true,
             data: users,
-            total: users.length
+            meta: {
+                total: stats.total,
+                active: stats.active,
+                inactive: stats.inactive,
+                byRole: stats.byRole
+            }
         });
     } catch (error) {
         console.error('Get users error:', error);
@@ -56,7 +62,7 @@ router.get('/:id', requirePermission('users:read'), async (req, res) => {
 
         res.json({
             success: true,
-            data: user
+            data: user.toJSON()
         });
     } catch (error) {
         console.error('Get user error:', error);
@@ -70,7 +76,7 @@ router.get('/:id', requirePermission('users:read'), async (req, res) => {
 // POST /api/users - создание нового пользователя
 router.post('/', requirePermission('users:write'), async (req, res) => {
     try {
-        const { username, password, role, email } = req.body;
+        const { username, password, role, email, isActive = true } = req.body;
 
         if (!username || !password || !role || !email) {
             return res.status(400).json({
@@ -88,11 +94,29 @@ router.post('/', requirePermission('users:write'), async (req, res) => {
             });
         }
 
+        // Валидация email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid email format'
+            });
+        }
+
+        // Валидация пароля
+        if (password.length < 6) {
+            return res.status(400).json({
+                success: false,
+                error: 'Password must be at least 6 characters long'
+            });
+        }
+
         const user = await userService.create({
             username,
             password,
             role,
-            email
+            email,
+            isActive
         }, req.user.id);
 
         res.status(201).json({
@@ -121,12 +145,20 @@ router.put('/:id', requirePermission('users:write'), async (req, res) => {
         const { email, role, isActive } = req.body;
 
         const updates = {};
-        if (email !== undefined) updates.email = email;
-        if (role !== undefined) updates.role = role;
-        if (isActive !== undefined) updates.isActive = isActive;
+        if (email !== undefined) {
+            // Валидация email
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid email format'
+                });
+            }
+            updates.email = email;
+        }
 
-        // Валидация роли если предоставлена
-        if (role) {
+        if (role !== undefined) {
+            // Валидация роли
             const validRoles = ['admin', 'operator', 'viewer'];
             if (!validRoles.includes(role)) {
                 return res.status(400).json({
@@ -134,6 +166,16 @@ router.put('/:id', requirePermission('users:write'), async (req, res) => {
                     error: 'Invalid role. Must be one of: admin, operator, viewer'
                 });
             }
+            updates.role = role;
+        }
+
+        if (isActive !== undefined) updates.isActive = isActive;
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No valid fields to update'
+            });
         }
 
         const user = await userService.update(req.params.id, updates, req.user.id);
@@ -178,6 +220,14 @@ router.post('/:id/change-password', async (req, res) => {
             });
         }
 
+        // Валидация нового пароля
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                error: 'New password must be at least 6 characters long'
+            });
+        }
+
         const user = await userService.findById(req.user.id);
         if (!user) {
             return res.status(404).json({
@@ -219,6 +269,14 @@ router.post('/:id/reset-password', requirePermission('users:write'), async (req,
             return res.status(400).json({
                 success: false,
                 error: 'New password is required'
+            });
+        }
+
+        // Валидация пароля
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                error: 'Password must be at least 6 characters long'
             });
         }
 
@@ -305,5 +363,37 @@ router.post('/:id/deactivate', requirePermission('users:write'), async (req, res
         });
     }
 });
+
+// POST /api/users/:id/activate - активация пользователя
+router.post('/:id/activate', requirePermission('users:write'), async (req, res) => {
+    try {
+        const user = await userService.update(
+            req.params.id,
+            { isActive: true },
+            req.user.id
+        );
+
+        res.json({
+            success: true,
+            data: user,
+            message: 'User activated successfully'
+        });
+    } catch (error) {
+        console.error('Activate user error:', error);
+        if (error.message === 'User not found') {
+            return res.status(404).json({
+                success: false,
+                error: error.message
+            });
+        }
+        res.status(500).json({
+            success: false,
+            error: 'Failed to activate user'
+        });
+    }
+});
+
+// Экспортируем функцию для получения пользователей
+router.getUsers = () => userService.getUsers();
 
 module.exports = router;

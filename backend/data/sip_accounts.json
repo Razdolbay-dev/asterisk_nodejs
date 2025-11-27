@@ -9,5 +9,16 @@
     "updatedAt": "2025-11-27T12:00:12.864Z",
     "createdBy": 1,
     "updatedBy": 1
+  },
+  {
+    "id": "102",
+    "password": "qwertY102",
+    "context": "internal",
+    "codecs": "ulaw,alaw",
+    "status": "active",
+    "createdAt": "2025-11-27T12:23:58.898Z",
+    "updatedAt": "2025-11-27T12:23:58.898Z",
+    "createdBy": 1,
+    "updatedBy": 1
   }
 ]

@@ -6,7 +6,7 @@ const routes = [
         path: '/login',
         name: 'Login',
         component: () => import('@/views/Login.vue'),
-        meta: { requiresGuest: true }
+        meta: { requiresAuth: false }
     },
     {
         path: '/',
@@ -57,54 +57,42 @@ const router = createRouter({
     routes
 })
 
-// Глобальный navigation guard
+// Navigation guard
 router.beforeEach(async (to, from, next) => {
     const authStore = useAuthStore()
 
-    // Ждем инициализации store если нужно
+    console.log('🔐 Navigation guard triggered:', {
+        to: to.path,
+        requiresAuth: to.meta.requiresAuth,
+        isAuthenticated: authStore.isAuthenticated,
+        isInitialized: authStore.isInitialized
+    })
+
+    // Если стор еще не инициализирован, инициализируем его
     if (!authStore.isInitialized) {
-        console.log('🔄 Waiting for auth store initialization...')
+        console.log('🔐 Initializing auth store...')
         await authStore.initialize()
     }
 
-    console.log('🔐 Navigation guard after initialization:', {
-        to: to.path,
-        requiresAuth: to.meta.requiresAuth,
-        requiredRole: to.meta.requiredRole,
-        isAuthenticated: authStore.isAuthenticated,
-        userRole: authStore.userRole,
-        user: authStore.user
-    })
-
-    // Проверяем требуется ли аутентификация
-    if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-        console.log('🚫 Redirecting to login: not authenticated')
-        next('/login')
-        return
-    }
-
-    // Проверяем требуется ли роль
-    if (to.meta.requiredRole && authStore.isAuthenticated) {
-        const userRole = authStore.userRole
-        if (!userRole || !to.meta.requiredRole.includes(userRole)) {
-            console.log('🚫 Insufficient role:', {
-                required: to.meta.requiredRole,
-                userRole
-            })
+    // Если маршрут требует аутентификации
+    if (to.meta.requiresAuth) {
+        if (authStore.isAuthenticated) {
+            console.log('✅ User is authenticated, allowing access')
+            next()
+        } else {
+            console.log('🚫 User not authenticated, redirecting to login')
+            next('/login')
+        }
+    } else {
+        // Если маршрут не требует аутентификации (например, login)
+        if (to.path === '/login' && authStore.isAuthenticated) {
+            console.log('✅ User already authenticated, redirecting to dashboard')
             next('/')
-            return
+        } else {
+            console.log('✅ Allowing access to public route')
+            next()
         }
     }
-
-    // Проверяем требует ли страница гостевого доступа
-    if (to.meta.requiresGuest && authStore.isAuthenticated) {
-        console.log('🚫 Redirecting to dashboard: already authenticated')
-        next('/')
-        return
-    }
-
-    console.log('✅ Navigation allowed')
-    next()
 })
 
 export default router

@@ -24,4 +24,4 @@ dist-ssr
 *.sw?
 /.Trash-1000/
 /.vscode/
-backend/snapshots/
+/backend/snapshots/

@@ -8,7 +8,7 @@
         </div>
         <button
             v-if="hasPermission('users:write')"
-            @click="showCreateForm = true"
+            @click="openCreateForm"
             class="btn btn-primary"
         >
           <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -148,27 +148,38 @@
               {{ formatDate(user.createdAt) }}
             </td>
             <td v-if="hasPermission('users:write')" class="actions-cell">
-              <button
-                  @click="editUser(user)"
-                  class="btn btn-outline btn-sm"
-                  :disabled="user.id === currentUserId"
-              >
-                Edit
-              </button>
-              <button
-                  v-if="hasPermission('users:write') && user.id !== currentUserId"
-                  @click="showPasswordForm(user.id, true)"
-                  class="btn btn-outline btn-sm"
-              >
-                Reset Password
-              </button>
-              <button
-                  v-if="hasPermission('users:delete') && user.id !== currentUserId"
-                  @click="deleteUser(user)"
-                  class="btn btn-danger btn-sm"
-              >
-                Delete
-              </button>
+              <div class="flex space-x-2">
+                <button
+                    @click="editUser(user)"
+                    class="btn btn-outline btn-sm"
+                    :disabled="user.id === currentUserId"
+                    title="Edit User"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+                <button
+                    v-if="hasPermission('users:write') && user.id !== currentUserId"
+                    @click="showPasswordForm(user.id, true)"
+                    class="btn btn-outline btn-sm"
+                    title="Reset Password"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                  </svg>
+                </button>
+                <button
+                    v-if="hasPermission('users:delete') && user.id !== currentUserId"
+                    @click="deleteUser(user)"
+                    class="btn btn-danger btn-sm"
+                    title="Delete User"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
             </td>
           </tr>
           </tbody>
@@ -176,25 +187,44 @@
       </div>
     </div>
 
-    <!-- Modals -->
-    <UserForm
-        :show="showCreateForm || showEditForm"
-        :user="selectedUser"
-        :loading="formLoading"
-        :error="formError"
-        @close="closeForm"
-        @submit="handleFormSubmit"
-    />
+    <!-- User Form Modal -->
+    <div v-if="showUserForm" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-hidden">
+        <div class="p-6 border-b">
+          <h3 class="text-lg font-semibold text-gray-900">
+            {{ selectedUser ? 'Edit User' : 'Create New User' }}
+          </h3>
+        </div>
 
-    <PasswordForm
-        :show="showPasswordModal"
-        :userId="selectedUserId"
-        :isReset="isPasswordReset"
-        :loading="passwordLoading"
-        :error="passwordError"
-        @close="closePasswordForm"
-        @submit="handlePasswordSubmit"
-    />
+        <UserForm
+            :user="selectedUser"
+            :loading="formLoading"
+            :error="formError"
+            @close="closeUserForm"
+            @submit="handleUserFormSubmit"
+        />
+      </div>
+    </div>
+
+    <!-- Password Form Modal -->
+    <div v-if="showPasswordFormModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-hidden">
+        <div class="p-6 border-b">
+          <h3 class="text-lg font-semibold text-gray-900">
+            {{ isPasswordReset ? 'Reset Password' : 'Change Password' }}
+          </h3>
+        </div>
+
+        <PasswordForm
+            :userId="selectedUserId"
+            :isReset="isPasswordReset"
+            :loading="passwordLoading"
+            :error="passwordError"
+            @close="closePasswordForm"
+            @submit="handlePasswordFormSubmit"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -215,9 +245,8 @@ export default {
     const usersStore = useUsersStore()
     const authStore = useAuthStore()
 
-    const showCreateForm = ref(false)
-    const showEditForm = ref(false)
-    const showPasswordModal = ref(false)
+    const showUserForm = ref(false)
+    const showPasswordFormModal = ref(false)
     const selectedUser = ref(null)
     const selectedUserId = ref('')
     const isPasswordReset = ref(false)
@@ -233,8 +262,7 @@ export default {
     const currentUserId = computed(() => authStore.user?.id)
 
     const hasPermission = (permission) => {
-      // В реальном приложении здесь была бы проверка прав
-      return authStore.userRole === 'admin'
+      return authStore.user?.permissions?.includes(permission) || false
     }
 
     const loadData = async () => {
@@ -248,15 +276,20 @@ export default {
       await loadData()
     }
 
+    const openCreateForm = () => {
+      selectedUser.value = null
+      showUserForm.value = true
+    }
+
     const editUser = (user) => {
       selectedUser.value = user
-      showEditForm.value = true
+      showUserForm.value = true
     }
 
     const showPasswordForm = (userId, isReset = false) => {
       selectedUserId.value = userId
       isPasswordReset.value = isReset
-      showPasswordModal.value = true
+      showPasswordFormModal.value = true
     }
 
     const deleteUser = async (user) => {
@@ -268,61 +301,70 @@ export default {
       if (!result.success) {
         alert(result.error)
       } else {
-        await loadData() // Refresh data
+        await loadData()
       }
     }
 
-    const handleFormSubmit = async (formData) => {
+    const handleUserFormSubmit = async (formData) => {
       formLoading.value = true
       formError.value = ''
 
-      let result
-      if (selectedUser.value) {
-        result = await usersStore.updateUser(selectedUser.value.id, formData)
-      } else {
-        result = await usersStore.createUser(formData)
-      }
+      try {
+        let result
+        if (selectedUser.value) {
+          result = await usersStore.updateUser(selectedUser.value.id, formData)
+        } else {
+          result = await usersStore.createUser(formData)
+        }
 
-      if (result.success) {
-        closeForm()
-        await loadData() // Refresh data
-      } else {
-        formError.value = result.error
+        if (result.success) {
+          closeUserForm()
+          await loadData()
+        } else {
+          formError.value = result.error
+        }
+      } catch (err) {
+        formError.value = 'An unexpected error occurred'
+        console.error('User form error:', err)
+      } finally {
+        formLoading.value = false
       }
-
-      formLoading.value = false
     }
 
-    const handlePasswordSubmit = async (passwordData) => {
+    const handlePasswordFormSubmit = async (passwordData) => {
       passwordLoading.value = true
       passwordError.value = ''
 
-      let result
-      if (isPasswordReset.value) {
-        result = await usersStore.resetPassword(selectedUserId.value, passwordData.newPassword)
-      } else {
-        result = await usersStore.changePassword(selectedUserId.value, passwordData)
-      }
+      try {
+        let result
+        if (isPasswordReset.value) {
+          result = await usersStore.resetPassword(selectedUserId.value, passwordData.newPassword)
+        } else {
+          result = await usersStore.changePassword(selectedUserId.value, passwordData)
+        }
 
-      if (result.success) {
-        closePasswordForm()
-        alert('Password updated successfully')
-      } else {
-        passwordError.value = result.error
+        if (result.success) {
+          closePasswordForm()
+          alert('Password updated successfully')
+        } else {
+          passwordError.value = result.error
+        }
+      } catch (err) {
+        passwordError.value = 'An unexpected error occurred'
+        console.error('Password form error:', err)
+      } finally {
+        passwordLoading.value = false
       }
-
-      passwordLoading.value = false
     }
 
-    const closeForm = () => {
-      showCreateForm.value = false
-      showEditForm.value = false
+    const closeUserForm = () => {
+      showUserForm.value = false
       selectedUser.value = null
       formError.value = ''
     }
 
     const closePasswordForm = () => {
-      showPasswordModal.value = false
+      showPasswordFormModal.value = false
       selectedUserId.value = ''
       passwordError.value = ''
     }
@@ -337,7 +379,11 @@ export default {
     }
 
     const formatDate = (dateString) => {
-      return new Date(dateString).toLocaleDateString()
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
     }
 
     onMounted(() => {
@@ -350,9 +396,8 @@ export default {
       error,
       stats,
       currentUserId,
-      showCreateForm,
-      showEditForm,
-      showPasswordModal,
+      showUserForm,
+      showPasswordFormModal,
       selectedUser,
       selectedUserId,
       isPasswordReset,
@@ -362,12 +407,13 @@ export default {
       passwordError,
       hasPermission,
       refreshUsers,
+      openCreateForm,
       editUser,
       showPasswordForm,
       deleteUser,
-      handleFormSubmit,
-      handlePasswordSubmit,
-      closeForm,
+      handleUserFormSubmit,
+      handlePasswordFormSubmit,
+      closeUserForm,
       closePasswordForm,
       getRoleBadgeClass,
       formatDate
@@ -375,3 +421,81 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+.stat-card {
+  @apply bg-white rounded-lg shadow p-6 border-l-4;
+}
+
+.data-table {
+  @apply min-w-full divide-y divide-gray-200;
+}
+
+.data-table thead {
+  @apply bg-gray-50;
+}
+
+.data-table th {
+  @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+}
+
+.data-table td {
+  @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
+}
+
+.data-table tbody tr {
+  @apply hover:bg-gray-50;
+}
+
+.actions-cell {
+  @apply space-x-2;
+}
+
+.badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.badge-error {
+  @apply bg-red-100 text-red-800;
+}
+
+.badge-warning {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.badge-info {
+  @apply bg-blue-100 text-blue-800;
+}
+
+.badge-success {
+  @apply bg-green-100 text-green-800;
+}
+
+.btn {
+  @apply inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2;
+}
+
+.btn-primary {
+  @apply bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500;
+}
+
+.btn-outline {
+  @apply border border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-blue-500;
+}
+
+.btn-danger {
+  @apply bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+}
+
+.btn-sm {
+  @apply px-2 py-1 text-xs;
+}
+
+.btn:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+.card {
+  @apply bg-white rounded-lg shadow;
+}
+</style>

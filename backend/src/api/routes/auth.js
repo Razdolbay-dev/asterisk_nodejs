@@ -1,247 +1,232 @@
+// backend/src/api/routes/auth.js
+
 const express = require('express');
 const JWTUtils = require('../../utils/jwt');
-const PasswordUtils = require('../../utils/password');
-const { users, authenticateToken } = require('../../middleware/auth');
+const userService = require('../../services/user.service');
+const auditService = require('../../services/audit.service');
+const { authenticateToken } = require('../../middleware/auth');
 
 const router = express.Router();
 
 // POST /api/auth/login
-/**
- * @swagger
- * /api/auth/login:
- *   post:
- *     summary: User login
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - username
- *               - password
- *             properties:
- *               username:
- *                 type: string
- *                 example: admin
- *               password:
- *                 type: string
- *                 example: password123
- *     responses:
- *       200:
- *         description: Login successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 token:
- *                   type: string
- *                   example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
- *                 user:
- *                   $ref: '#/components/schemas/User'
- *       400:
- *         description: Missing credentials
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       401:
- *         description: Invalid credentials
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
 router.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
 
+        console.log('Login attempt for user:', username);
+
         if (!username || !password) {
             return res.status(400).json({
                 success: false,
-                error: 'Username and password required'
+                error: 'Username and password are required'
             });
         }
 
-        // Поиск пользователя
-        const user = users.find(u => u.username === username);
-
+        // Находим пользователя
+        const user = await userService.findByUsername(username);
         if (!user) {
+            console.log('User not found:', username);
+            await auditService.log({
+                action: 'LOGIN_FAILED',
+                userId: null,
+                details: {
+                    username: username,
+                    reason: 'User not found',
+                    ip: req.ip
+                },
+                timestamp: new Date().toISOString()
+            });
+
             return res.status(401).json({
                 success: false,
                 error: 'Invalid credentials'
             });
         }
 
-        // Проверка пароля
-        // Для демо: если пароль "password123", считаем валидным
-        // В реальном приложении используем: await PasswordUtils.comparePassword(password, user.password)
-        const isValidPassword = password === 'password123';
+        console.log('User found:', user.username, 'ID:', user.id);
+
+        // Проверяем блокировку
+        if (user.isLocked()) {
+            console.log('Account locked for user:', username);
+            await auditService.log({
+                action: 'LOGIN_FAILED',
+                userId: user.id,
+                details: {
+                    username: username,
+                    reason: 'Account locked',
+                    lockedUntil: user.lockedUntil,
+                    ip: req.ip
+                },
+                timestamp: new Date().toISOString()
+            });
+
+            return res.status(401).json({
+                success: false,
+                error: 'Account is temporarily locked due to failed login attempts'
+            });
+        }
+
+        // Проверяем пароль
+        console.log('Checking password for user:', username);
+        const isValidPassword = await user.checkPassword(password);
+        console.log('Password valid:', isValidPassword);
 
         if (!isValidPassword) {
+            console.log('Invalid password for user:', username);
+            // Записываем неудачную попытку
+            user.recordFailedLogin();
+            await userService.updateUser(user);
+
+            await auditService.log({
+                action: 'LOGIN_FAILED',
+                userId: user.id,
+                details: {
+                    username: username,
+                    reason: 'Invalid password',
+                    failedAttempts: user.failedLoginAttempts,
+                    ip: req.ip
+                },
+                timestamp: new Date().toISOString()
+            });
+
             return res.status(401).json({
                 success: false,
                 error: 'Invalid credentials'
             });
         }
 
-        // Генерация JWT токена
-        const tokenPayload = {
-            id: user.id,
-            username: user.username,
-            role: user.role,
-            email: user.email
-        };
+        // Сбрасываем счетчик неудачных попыток при успешном входе
+        user.recordSuccessfulLogin();
+        await userService.updateUser(user);
 
-        const token = JWTUtils.generateToken(tokenPayload);
+        // Генерируем токен
+        const token = JWTUtils.generateToken(user);
+
+        await auditService.log({
+            action: 'LOGIN_SUCCESS',
+            userId: user.id,
+            details: {
+                username: username,
+                ip: req.ip
+            },
+            timestamp: new Date().toISOString()
+        });
+
+        console.log('Login successful for user:', username);
 
         res.json({
             success: true,
-            token,
-            user: {
-                id: user.id,
-                username: user.username,
-                role: user.role,
-                email: user.email
-            }
+            data: {
+                token,
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    role: user.role,
+                    email: user.email,
+                    permissions: JWTUtils.getUserPermissions(user.role)
+                }
+            },
+            message: 'Login successful'
         });
 
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({
             success: false,
-            error: 'Internal server error'
+            error: 'Login failed: ' + error.message
         });
     }
 });
 
-// GET /api/auth/me - получение информации о текущем пользователе
-/**
- * @swagger
- * /api/auth/me:
- *   get:
- *     summary: Get current user info
- *     tags: [Authentication]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: User information
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 user:
- *                   $ref: '#/components/schemas/User'
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.get('/me', authenticateToken, (req, res) => {
-    res.json({
-        success: true,
-        user: req.user
-    });
-});
-
-// POST /api/auth/refresh - обновление токена
-/**
- * @swagger
- * /api/auth/refresh:
- *   post:
- *     summary: Refresh JWT token
- *     tags: [Authentication]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Token refreshed
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 token:
- *                   type: string
- *                   example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
- *                 user:
- *                   $ref: '#/components/schemas/User'
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.post('/refresh', authenticateToken, (req, res) => {
+// POST /api/auth/refresh
+router.post('/refresh', async (req, res) => {
     try {
-        const newToken = JWTUtils.generateToken({
-            id: req.user.id,
-            username: req.user.username,
-            role: req.user.role,
-            email: req.user.email
-        });
+        const token = JWTUtils.extractToken(req.headers.authorization);
+
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                error: 'Refresh token required'
+            });
+        }
+
+        const newToken = await JWTUtils.refreshToken(token);
 
         res.json({
             success: true,
-            token: newToken,
-            user: req.user
+            data: {
+                token: newToken
+            },
+            message: 'Token refreshed successfully'
         });
+
     } catch (error) {
         console.error('Token refresh error:', error);
+        res.status(401).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// GET /api/auth/me
+router.get('/me', authenticateToken, async (req, res) => {
+    try {
+        const user = await userService.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                error: 'User not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                id: user.id,
+                username: user.username,
+                role: user.role,
+                email: user.email,
+                isActive: user.isActive,
+                lastLogin: user.lastLogin,
+                permissions: JWTUtils.getUserPermissions(user.role)
+            }
+        });
+
+    } catch (error) {
+        console.error('Get user profile error:', error);
         res.status(500).json({
             success: false,
-            error: 'Internal server error'
+            error: 'Failed to get user profile'
         });
     }
 });
 
 // POST /api/auth/logout
-/**
- * @swagger
- * /api/auth/logout:
- *   post:
- *     summary: User logout
- *     tags: [Authentication]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Logout successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: Logged out successfully
- */
-router.post('/logout', authenticateToken, (req, res) => {
-    // В JWT логаут обычно делается на клиенте путем удаления токена
-    // Здесь можно добавить blacklist токенов если нужно
-    res.json({
-        success: true,
-        message: 'Logged out successfully'
-    });
+router.post('/logout', authenticateToken, async (req, res) => {
+    try {
+        await auditService.log({
+            action: 'LOGOUT',
+            userId: req.user.id,
+            details: {
+                username: req.user.username,
+                ip: req.ip
+            },
+            timestamp: new Date().toISOString()
+        });
+
+        res.json({
+            success: true,
+            message: 'Logout successful'
+        });
+
+    } catch (error) {
+        console.error('Logout error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Logout failed'
+        });
+    }
 });
 
 module.exports = router;
