@@ -1,25 +1,14 @@
 [
   {
-    "id": "1",
-    "username": "admin",
-    "role": "admin",
-    "email": "admin@asterisk.local",
-    "isActive": true,
-    "createdAt": "2025-11-27T14:13:37.458Z",
-    "updatedAt": "2025-11-27T14:19:41.547Z",
-    "lastLogin": "2025-11-27T14:19:41.547Z",
-    "failedLoginAttempts": 0,
-    "lockedUntil": null
-  },
-  {
-    "id": "b0128d8e-80a9-4e4c-aa4b-4ea3501e3585",
+    "id": "5c5ab317-65ff-4bf3-9c5c-b99dff0a7052",
     "username": "paul",
+    "password": "$2a$12$OYpwTcLVqo4gQmxe7Er.yOw6uUsHJ4M60q4ow7xfi6fxwytizGyb2",
     "role": "admin",
     "email": "paul@netonline.ru",
     "isActive": true,
-    "createdAt": "2025-11-27T14:20:19.345Z",
-    "updatedAt": "2025-11-27T14:20:30.975Z",
-    "lastLogin": "2025-11-27T14:20:30.975Z",
+    "createdAt": "2025-11-27T19:45:45.940Z",
+    "updatedAt": "2025-11-27T19:46:17.755Z",
+    "lastLogin": "2025-11-27T19:46:17.755Z",
     "failedLoginAttempts": 0,
     "lockedUntil": null
   }

@@ -126,6 +126,7 @@ class User {
         return {
             id: this.id,
             username: this.username,
+            password: this.password, // ← ВАЖНО: включаем пароль!
             role: this.role,
             email: this.email,
             isActive: this.isActive,

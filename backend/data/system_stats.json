@@ -1,11 +1,11 @@
 {
-  "timestamp": "2025-11-27T14:20:30.976Z",
-  "users": 2,
+  "timestamp": "2025-11-27T19:46:25.903Z",
+  "users": 1,
   "sip_accounts": 2,
   "queues": 1,
   "trunks": 1,
   "system": {
     "version": "1.0.0",
-    "lastUpdate": "2025-11-27T14:20:30.977Z"
+    "lastUpdate": "2025-11-27T19:46:25.904Z"
   }
 }
